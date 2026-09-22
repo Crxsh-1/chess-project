@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
 import './App.css'
@@ -13,6 +13,9 @@ type CapturedPiece = {
   name: string
 }
 
+type BoardSide = 'white' | 'black'
+type SideChoice = BoardSide | 'random'
+
 const pieceNames: Record<string, string> = {
   p: 'Pawn',
   n: 'Knight',
@@ -24,6 +27,10 @@ const pieceNames: Record<string, string> = {
 
 function App() {
   const [game, setGame] = useState(() => new Chess())
+  const [playerSide, setPlayerSide] = useState<BoardSide>('white')
+  const [sideChoice, setSideChoice] = useState<SideChoice>('white')
+  const [boardOrientation, setBoardOrientation] = useState<BoardSide>('white')
+  const [isSetupOpen, setIsSetupOpen] = useState(false)
   const isGameOver = game.isGameOver()
   const isCheckmate = game.isCheckmate()
   const isStalemate = game.isStalemate()
@@ -77,7 +84,7 @@ function App() {
   }
 
   const handleNewGame = () => {
-    setGame(new Chess())
+    setIsSetupOpen(true)
   }
 
   const handleUndoMove = () => {
@@ -99,6 +106,21 @@ function App() {
         : `${turn} to move`
   const statusTone = isCheckmate || isStalemate ? 'status-terminal' : isCheck ? 'status-warning' : ''
 
+  useEffect(() => {
+    if (!isSetupOpen) {
+      return
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSetupOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [isSetupOpen])
+
   return (
     <main className="app-shell">
       <div className="game-layout">
@@ -109,6 +131,9 @@ function App() {
             <p className="header-copy">A considered match between two players at the same board.</p>
           </div>
           <div className="game-actions">
+            <button className="secondary-button" type="button" onClick={() => setBoardOrientation((current) => current === 'white' ? 'black' : 'white')}>
+              Flip board
+            </button>
             <button className="secondary-button" type="button" onClick={handleUndoMove} disabled={moveHistory.length === 0}>
               Undo move
             </button>
@@ -120,7 +145,7 @@ function App() {
 
         <section className="game-area" aria-labelledby="page-title">
           <div className="board-column">
-            <div className="player-card player-black">
+            <div className={`player-card player-black ${playerSide === 'black' ? 'player-selected' : ''}`}>
               <div className="player-mark" aria-hidden="true">B</div>
               <div>
                 <p className="player-name">Black</p>
@@ -129,10 +154,11 @@ function App() {
               {turn === 'Black' && !isGameOver && <span className="turn-badge">To move</span>}
             </div>
 
-            <div className="board-frame">
+            <div className="board-frame" aria-label={`${boardOrientation === 'white' ? 'White' : 'Black'} perspective`}>
             <Chessboard
               options={{
                 position: game.fen(),
+                  boardOrientation,
                 onPieceDrop: handlePieceDrop,
                 allowDragging: !isGameOver,
                 animationDurationInMs: 180,
@@ -143,7 +169,7 @@ function App() {
             />
             </div>
 
-            <div className="player-card player-white">
+            <div className={`player-card player-white ${playerSide === 'white' ? 'player-selected' : ''}`}>
               <div className="player-mark" aria-hidden="true">W</div>
               <div>
                 <p className="player-name">White</p>
@@ -215,6 +241,52 @@ function App() {
           </aside>
         </section>
       </div>
+
+      {isSetupOpen && (
+        <div className="setup-backdrop">
+          <section className="setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+            <div className="setup-heading">
+              <div>
+                <p className="eyebrow">New game</p>
+                <h2 id="setup-title">Choose your side</h2>
+              </div>
+              <button className="close-button" type="button" onClick={() => setIsSetupOpen(false)} aria-label="Close new game setup">
+                ×
+              </button>
+            </div>
+            <p className="setup-copy">Pick a perspective for this local game. You can flip the board at any time.</p>
+            <fieldset className="side-options">
+              <legend className="sr-only">Player side</legend>
+              {(['white', 'black', 'random'] as const).map((choice) => (
+                <label className={`side-option ${sideChoice === choice ? 'side-option-selected' : ''}`} key={choice}>
+                  <input
+                    type="radio"
+                    name="player-side"
+                    value={choice}
+                    checked={sideChoice === choice}
+                    onChange={() => setSideChoice(choice)}
+                  />
+                  <span className="side-option-mark" aria-hidden="true">{choice === 'random' ? '?' : choice[0].toUpperCase()}</span>
+                  <span>
+                    <strong>{choice === 'random' ? 'Random side' : `Play as ${choice[0].toUpperCase()}${choice.slice(1)}`}</strong>
+                    <small>{choice === 'random' ? 'Let the board choose your perspective' : `Start from the ${choice} side`}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="setup-actions">
+              <button className="secondary-button" type="button" onClick={() => setIsSetupOpen(false)}>Cancel</button>
+              <button className="new-game-button" type="button" onClick={() => {
+                const selectedSide = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
+                setPlayerSide(selectedSide)
+                setBoardOrientation(selectedSide)
+                setGame(new Chess())
+                setIsSetupOpen(false)
+              }}>Start game</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   )
 }
