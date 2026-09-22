@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
+import { isHumanTurn, SessionGuard, undoToDecisionPoint } from './gameLogic'
 import { StockfishEngine, type EngineDifficulty } from './stockfishEngine'
 import './App.css'
 
@@ -39,8 +40,9 @@ function App() {
   const [isSetupOpen, setIsSetupOpen] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
   const [engineReady, setEngineReady] = useState(false)
+  const [engineError, setEngineError] = useState<string | null>(null)
   const engineRef = useRef<StockfishEngine | null>(null)
-  const sessionRef = useRef(0)
+  const sessionGuardRef = useRef(new SessionGuard())
   const isGameOver = game.isGameOver()
   const isCheckmate = game.isCheckmate()
   const isStalemate = game.isStalemate()
@@ -73,7 +75,7 @@ function App() {
   }, [game])
 
   const handlePieceDrop = ({ sourceSquare, targetSquare }: PieceDropArgs) => {
-    if (!targetSquare || isGameOver || isThinking || (isStockfishGame && !isHumanTurn)) {
+    if (!targetSquare || isGameOver || isThinking || (isStockfishGame && !isHumanTurn(game, playerSide))) {
       return false
     }
 
@@ -94,34 +96,31 @@ function App() {
   }
 
   const handleNewGame = () => {
-    sessionRef.current += 1
+    sessionGuardRef.current.next()
     engineRef.current?.cancel()
     setIsThinking(false)
     setIsSetupOpen(true)
   }
 
   const handleUndoMove = () => {
-    if (moveHistory.length === 0 || isThinking) {
+    if (moveHistory.length === 0) {
       return
     }
 
-    const previousGame = new Chess(game.fen())
-    previousGame.undo()
-
-    if (isStockfishGame && previousGame.history().length > 0) {
-      previousGame.undo()
-    }
-
-    sessionRef.current += 1
+    const previousGame = undoToDecisionPoint(game, isStockfishGame, isThinking)
+    sessionGuardRef.current.next()
     engineRef.current?.cancel()
+    setIsThinking(false)
     setGame(previousGame)
   }
 
   const handleStartGame = () => {
     const selectedSide = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
-    sessionRef.current += 1
+    sessionGuardRef.current.next()
     engineRef.current?.cancel()
     setIsThinking(false)
+    setEngineReady(true)
+    setEngineError(null)
     setPlayerSide(selectedSide)
     setBoardOrientation(selectedSide)
     setGameMode(gameModeChoice)
@@ -139,13 +138,22 @@ function App() {
         : `${turn} to move`
   const statusTone = isCheckmate || isStalemate ? 'status-terminal' : isCheck ? 'status-warning' : ''
   const isStockfishGame = gameMode === 'stockfish'
-  const isHumanTurn = game.turn() === (playerSide === 'white' ? 'w' : 'b')
   const displayedStatus = isThinking ? 'Stockfish is thinking...' : status
 
   useEffect(() => {
-    const engine = new StockfishEngine()
+    const engine = new StockfishEngine((error) => {
+      setEngineError(error.message)
+      setEngineReady(false)
+      setIsThinking(false)
+    })
     engineRef.current = engine
-    setEngineReady(true)
+    engine.whenReady()
+      .then(() => setEngineReady(true))
+      .catch((error: Error) => {
+        setEngineError(error.message)
+        setEngineReady(false)
+        setIsThinking(false)
+      })
 
     return () => {
       engine.dispose()
@@ -154,18 +162,19 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!engineReady || !isStockfishGame || isGameOver || isHumanTurn || !engineRef.current) {
+    if (!engineReady || isSetupOpen || !isStockfishGame || isGameOver || isHumanTurn(game, playerSide) || !engineRef.current) {
       return
     }
 
     const engine = engineRef.current
-    const session = sessionRef.current
+    const session = sessionGuardRef.current.next()
     const position = game.fen()
     let cancelled = false
     setIsThinking(true)
 
     engine.requestMove(position, difficulty).then((bestMove) => {
-      if (cancelled || session !== sessionRef.current) {
+      if (cancelled || !sessionGuardRef.current.isCurrent(session)) {
+        setIsThinking(false)
         return
       }
 
@@ -187,6 +196,7 @@ function App() {
         })
         setGame(nextGame)
       } catch {
+        setEngineError('Stockfish returned an unusable move.')
         setIsThinking(false)
       }
     })
@@ -196,7 +206,7 @@ function App() {
       engine.cancel()
       setIsThinking(false)
     }
-  }, [difficulty, engineReady, game, isGameOver, isHumanTurn, isStockfishGame])
+  }, [difficulty, engineReady, game, isGameOver, isSetupOpen, isStockfishGame, playerSide])
 
   useEffect(() => {
     if (!isSetupOpen) {
@@ -276,7 +286,7 @@ function App() {
               <span className="status-dot" aria-hidden="true" />
               <div>
                 <p className="card-label">Game status</p>
-                <p className="game-status">{displayedStatus}</p>
+                <p className="game-status">{engineError ?? displayedStatus}</p>
               </div>
             </div>
 

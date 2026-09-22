@@ -1,10 +1,6 @@
-export type EngineDifficulty = 'easy' | 'medium' | 'hard'
+import { searchDepths } from './gameLogic'
 
-const searchDepths: Record<EngineDifficulty, number> = {
-  easy: 6,
-  medium: 10,
-  hard: 14,
-}
+export type EngineDifficulty = 'easy' | 'medium' | 'hard'
 
 type PendingRequest = {
   id: number
@@ -12,32 +8,42 @@ type PendingRequest = {
 }
 
 export class StockfishEngine {
-  private readonly worker: Worker
-  private readonly ready: Promise<void>
+  private worker: Worker | null = null
+  private ready: Promise<void> = Promise.resolve()
   private resolveReady: (() => void) | null = null
   private rejectReady: ((reason: Error) => void) | null = null
   private pendingRequest: PendingRequest | null = null
   private requestId = 0
+  private error: Error | null = null
 
-  constructor() {
-    this.worker = new Worker(`${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`)
+  constructor(private readonly onError?: (error: Error) => void) {
+    this.startWorker()
+  }
+
+  private startWorker() {
+    const worker = new Worker(`${import.meta.env.BASE_URL}stockfish/stockfish-19-lite-single.js`)
+    this.worker = worker
     this.ready = new Promise<void>((resolve, reject) => {
       this.resolveReady = resolve
       this.rejectReady = reject
     })
-    this.worker.onmessage = (event: MessageEvent<string>) => this.handleMessage(event.data)
-    this.worker.onerror = () => {
+    worker.onmessage = (event: MessageEvent<string>) => this.handleMessage(event.data)
+    worker.onerror = () => {
       const error = new Error('Stockfish worker failed to load')
+      this.error = error
       this.rejectReady?.(error)
       this.rejectReady = null
       this.pendingRequest?.resolve(null)
       this.pendingRequest = null
+      this.onError?.(error)
     }
-    this.worker.postMessage('uci')
+    worker.postMessage('uci')
   }
 
   requestMove(fen: string, difficulty: EngineDifficulty): Promise<string | null> {
     this.cancel()
+    this.error = null
+    this.startWorker()
     const id = ++this.requestId
 
     return this.ready
@@ -48,27 +54,36 @@ export class StockfishEngine {
         }
 
         this.pendingRequest = { id, resolve }
-        this.worker.postMessage(`position fen ${fen}`)
-        this.worker.postMessage(`go depth ${searchDepths[difficulty]}`)
+        this.worker?.postMessage(`position fen ${fen}`)
+        this.worker?.postMessage(`go depth ${searchDepths[difficulty]}`)
       }))
       .catch(() => null)
   }
 
+  whenReady() {
+    return this.ready
+  }
+
+  getError() {
+    return this.error
+  }
+
   cancel() {
     this.requestId += 1
-    this.worker.postMessage('stop')
+    this.worker?.postMessage('stop')
     this.pendingRequest?.resolve(null)
     this.pendingRequest = null
+    this.worker?.terminate()
+    this.worker = null
   }
 
   dispose() {
     this.cancel()
-    this.worker.terminate()
   }
 
   private handleMessage(line: string) {
     if (line === 'uciok') {
-      this.worker.postMessage('isready')
+      this.worker?.postMessage('isready')
       return
     }
 
