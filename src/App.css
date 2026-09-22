@@ -1,20 +1,15 @@
 .app-shell {
-  display: grid;
   min-height: 100vh;
-  place-items: center;
-  padding: 2rem;
+  padding: clamp(1.25rem, 4vw, 4rem);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.72), transparent 48%),
     repeating-linear-gradient(45deg, rgba(39, 37, 31, 0.025) 0 1px, transparent 1px 10px),
     #f4f0e8;
 }
 
-.welcome-panel {
-  width: min(100%, 42rem);
-  padding: clamp(2rem, 8vw, 5rem);
-  border: 1px solid rgba(39, 37, 31, 0.15);
-  background: rgba(255, 253, 248, 0.82);
-  box-shadow: 16px 16px 0 #d7cbb7;
+.game-layout {
+  width: min(100%, 76rem);
+  margin: 0 auto;
 }
 
 .eyebrow {
@@ -28,42 +23,187 @@
 }
 
 h1 {
-  max-width: 10ch;
   margin: 0;
-  font-size: clamp(2.75rem, 8vw, 5.5rem);
+  font-size: clamp(2.25rem, 5vw, 4.5rem);
   font-weight: 400;
   line-height: 0.95;
 }
 
-.intro {
-  max-width: 34rem;
-  margin: 2rem 0 0;
-  color: #625c50;
-  font-family: 'Trebuchet MS', sans-serif;
-  font-size: 1rem;
-  line-height: 1.65;
+.game-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: clamp(1.5rem, 4vw, 3rem);
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 2.5rem;
-  padding: 0.65rem 0.9rem;
-  color: #356247;
-  border: 1px solid rgba(53, 98, 71, 0.28);
-  border-radius: 999px;
-  background: #edf5ed;
+.new-game-button {
+  padding: 0.8rem 1.1rem;
+  color: #fffdf8;
+  border: 0;
+  border-radius: 2px;
+  background: #9b4b32;
   font-family: 'Trebuchet MS', sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.new-game-button:hover {
+  background: #7e3825;
+  transform: translateY(-2px);
+}
+
+.new-game-button:focus-visible {
+  outline: 3px solid #d7cbb7;
+  outline-offset: 3px;
+}
+
+.game-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.board-frame {
+  width: min(100%, 42rem);
+  padding: clamp(0.45rem, 1vw, 0.75rem);
+  background: #27251f;
+  box-shadow: 12px 12px 0 #d7cbb7;
+}
+
+.game-sidebar {
+  display: grid;
+  gap: 1rem;
+}
+
+.status-card,
+.history-card {
+  border: 1px solid rgba(39, 37, 31, 0.15);
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.status-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1.25rem;
+}
+
+.card-label {
+  margin: 0;
+  color: #9b4b32;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
+.game-status {
+  margin: 0.4rem 0 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
 .status-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  flex: 0 0 auto;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.25rem;
   border-radius: 50%;
   background: #4f9364;
+}
+
+.status-dot-check {
+  background: #b94c3a;
+}
+
+.history-card {
+  min-height: 15rem;
+  padding: 1.25rem;
+}
+
+.history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(39, 37, 31, 0.12);
+}
+
+.history-heading > span {
+  color: #625c50;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.75rem;
+}
+
+.move-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 25rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.9rem;
+}
+
+.move-list li {
+  display: grid;
+  grid-template-columns: 2rem 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.move-number,
+.empty-history {
+  color: #625c50;
+}
+
+.empty-history {
+  margin: 1rem 0 0;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 800px) {
+  .game-header {
+    align-items: flex-start;
+  }
+
+  .game-area {
+    grid-template-columns: 1fr;
+  }
+
+  .board-frame {
+    width: 100%;
+  }
+
+  .game-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    padding: 1rem;
+  }
+
+  .game-header {
+    display: block;
+  }
+
+  .new-game-button {
+    margin-top: 1.25rem;
+  }
+
+  .game-sidebar {
+    grid-template-columns: 1fr;
+  }
 }

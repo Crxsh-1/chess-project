@@ -25,4 +25,5 @@ npm run build
 npm test
 ```
 
-The chess rules and board UI will be added in a later step.
+Milestone 1 includes a local chess game with legal move validation, captures,
+check and game-over status, reset support, and move history.
