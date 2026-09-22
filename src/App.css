@@ -37,12 +37,27 @@ h1 {
   margin-bottom: clamp(1.5rem, 4vw, 3rem);
 }
 
+.header-copy {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  color: #625c50;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.secondary-button,
 .new-game-button {
   padding: 0.8rem 1.1rem;
-  color: #fffdf8;
-  border: 0;
+  border: 1px solid rgba(39, 37, 31, 0.22);
   border-radius: 2px;
-  background: #9b4b32;
   font-family: 'Trebuchet MS', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
@@ -52,11 +67,31 @@ h1 {
   transition: background 160ms ease, transform 160ms ease;
 }
 
+.secondary-button {
+  color: #27251f;
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.new-game-button {
+  color: #fffdf8;
+  border-color: #9b4b32;
+  background: #9b4b32;
+}
+
+.secondary-button:hover:not(:disabled),
 .new-game-button:hover {
   background: #7e3825;
+  color: #fffdf8;
   transform: translateY(-2px);
 }
 
+.secondary-button:disabled {
+  color: #aaa396;
+  background: rgba(255, 253, 248, 0.4);
+  cursor: not-allowed;
+}
+
+.secondary-button:focus-visible,
 .new-game-button:focus-visible {
   outline: 3px solid #d7cbb7;
   outline-offset: 3px;
@@ -69,8 +104,75 @@ h1 {
   gap: clamp(1.5rem, 4vw, 3.5rem);
 }
 
-.board-frame {
+.board-column {
+  display: grid;
   width: min(100%, 42rem);
+  gap: 0.7rem;
+}
+
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(39, 37, 31, 0.15);
+  background: rgba(255, 253, 248, 0.76);
+}
+
+.player-black {
+  background: #27251f;
+  color: #fffdf8;
+}
+
+.player-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.player-name,
+.player-role {
+  margin: 0;
+}
+
+.player-name {
+  font-size: 1.1rem;
+}
+
+.player-role {
+  margin-top: 0.15rem;
+  color: #aaa396;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.player-white .player-role {
+  color: #625c50;
+}
+
+.turn-badge {
+  margin-left: auto;
+  padding: 0.35rem 0.55rem;
+  color: #356247;
+  border: 1px solid rgba(79, 147, 100, 0.3);
+  border-radius: 999px;
+  background: #edf5ed;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.board-frame {
   padding: clamp(0.45rem, 1vw, 0.75rem);
   background: #27251f;
   box-shadow: 12px 12px 0 #d7cbb7;
@@ -82,7 +184,8 @@ h1 {
 }
 
 .status-card,
-.history-card {
+.history-card,
+.captured-card {
   border: 1px solid rgba(39, 37, 31, 0.15);
   background: rgba(255, 253, 248, 0.82);
 }
@@ -119,8 +222,12 @@ h1 {
   background: #4f9364;
 }
 
-.status-dot-check {
+.status-warning .status-dot {
   background: #b94c3a;
+}
+
+.status-terminal .status-dot {
+  background: #9b4b32;
 }
 
 .history-card {
@@ -172,6 +279,54 @@ h1 {
   font-size: 0.9rem;
 }
 
+.captured-card {
+  padding: 1.25rem;
+}
+
+.capture-row {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.9rem;
+}
+
+.capture-label,
+.no-captures {
+  color: #625c50;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.75rem;
+}
+
+.captured-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-height: 1.4rem;
+}
+
+.captured-piece {
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 2px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.captured-black-piece {
+  color: #fffdf8;
+  background: #27251f;
+}
+
+.captured-white-piece {
+  color: #27251f;
+  border: 1px solid rgba(39, 37, 31, 0.2);
+  background: #f0e3c5;
+}
+
 @media (max-width: 800px) {
   .game-header {
     align-items: flex-start;
@@ -182,6 +337,10 @@ h1 {
   }
 
   .board-frame {
+    width: 100%;
+  }
+
+  .board-column {
     width: 100%;
   }
 
@@ -199,8 +358,18 @@ h1 {
     display: block;
   }
 
-  .new-game-button {
+  .header-copy {
+    margin-top: 0.8rem;
+  }
+
+  .game-actions {
+    justify-content: flex-start;
     margin-top: 1.25rem;
+  }
+
+  .secondary-button,
+  .new-game-button {
+    flex: 1;
   }
 
   .game-sidebar {
