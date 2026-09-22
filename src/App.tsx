@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
+import { StockfishEngine, type EngineDifficulty } from './stockfishEngine'
 import './App.css'
 
 type PieceDropArgs = {
@@ -15,6 +16,7 @@ type CapturedPiece = {
 
 type BoardSide = 'white' | 'black'
 type SideChoice = BoardSide | 'random'
+type GameMode = 'local' | 'stockfish'
 
 const pieceNames: Record<string, string> = {
   p: 'Pawn',
@@ -29,8 +31,16 @@ function App() {
   const [game, setGame] = useState(() => new Chess())
   const [playerSide, setPlayerSide] = useState<BoardSide>('white')
   const [sideChoice, setSideChoice] = useState<SideChoice>('white')
+  const [gameMode, setGameMode] = useState<GameMode>('local')
+  const [gameModeChoice, setGameModeChoice] = useState<GameMode>('local')
+  const [difficulty, setDifficulty] = useState<EngineDifficulty>('medium')
+  const [difficultyChoice, setDifficultyChoice] = useState<EngineDifficulty>('medium')
   const [boardOrientation, setBoardOrientation] = useState<BoardSide>('white')
   const [isSetupOpen, setIsSetupOpen] = useState(false)
+  const [isThinking, setIsThinking] = useState(false)
+  const [engineReady, setEngineReady] = useState(false)
+  const engineRef = useRef<StockfishEngine | null>(null)
+  const sessionRef = useRef(0)
   const isGameOver = game.isGameOver()
   const isCheckmate = game.isCheckmate()
   const isStalemate = game.isStalemate()
@@ -63,7 +73,7 @@ function App() {
   }, [game])
 
   const handlePieceDrop = ({ sourceSquare, targetSquare }: PieceDropArgs) => {
-    if (!targetSquare || isGameOver) {
+    if (!targetSquare || isGameOver || isThinking || (isStockfishGame && !isHumanTurn)) {
       return false
     }
 
@@ -84,17 +94,40 @@ function App() {
   }
 
   const handleNewGame = () => {
+    sessionRef.current += 1
+    engineRef.current?.cancel()
+    setIsThinking(false)
     setIsSetupOpen(true)
   }
 
   const handleUndoMove = () => {
-    if (moveHistory.length === 0) {
+    if (moveHistory.length === 0 || isThinking) {
       return
     }
 
     const previousGame = new Chess(game.fen())
     previousGame.undo()
+
+    if (isStockfishGame && previousGame.history().length > 0) {
+      previousGame.undo()
+    }
+
+    sessionRef.current += 1
+    engineRef.current?.cancel()
     setGame(previousGame)
+  }
+
+  const handleStartGame = () => {
+    const selectedSide = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
+    sessionRef.current += 1
+    engineRef.current?.cancel()
+    setIsThinking(false)
+    setPlayerSide(selectedSide)
+    setBoardOrientation(selectedSide)
+    setGameMode(gameModeChoice)
+    setDifficulty(difficultyChoice)
+    setGame(new Chess())
+    setIsSetupOpen(false)
   }
 
   const status = isCheckmate
@@ -105,6 +138,65 @@ function App() {
         ? `${turn} is in check`
         : `${turn} to move`
   const statusTone = isCheckmate || isStalemate ? 'status-terminal' : isCheck ? 'status-warning' : ''
+  const isStockfishGame = gameMode === 'stockfish'
+  const isHumanTurn = game.turn() === (playerSide === 'white' ? 'w' : 'b')
+  const displayedStatus = isThinking ? 'Stockfish is thinking...' : status
+
+  useEffect(() => {
+    const engine = new StockfishEngine()
+    engineRef.current = engine
+    setEngineReady(true)
+
+    return () => {
+      engine.dispose()
+      engineRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!engineReady || !isStockfishGame || isGameOver || isHumanTurn || !engineRef.current) {
+      return
+    }
+
+    const engine = engineRef.current
+    const session = sessionRef.current
+    const position = game.fen()
+    let cancelled = false
+    setIsThinking(true)
+
+    engine.requestMove(position, difficulty).then((bestMove) => {
+      if (cancelled || session !== sessionRef.current) {
+        return
+      }
+
+      setIsThinking(false)
+      if (!bestMove) {
+        return
+      }
+
+      const nextGame = new Chess(position)
+      if (nextGame.isGameOver()) {
+        return
+      }
+
+      try {
+        nextGame.move({
+          from: bestMove.slice(0, 2),
+          to: bestMove.slice(2, 4),
+          promotion: bestMove[4] ?? 'q',
+        })
+        setGame(nextGame)
+      } catch {
+        setIsThinking(false)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      engine.cancel()
+      setIsThinking(false)
+    }
+  }, [difficulty, engineReady, game, isGameOver, isHumanTurn, isStockfishGame])
 
   useEffect(() => {
     if (!isSetupOpen) {
@@ -126,7 +218,7 @@ function App() {
       <div className="game-layout">
         <header className="game-header">
           <div>
-            <p className="eyebrow">Milestone 02 / Local game</p>
+            <p className="eyebrow">Milestone 04 / Local game</p>
             <h1 id="page-title">The quiet board</h1>
             <p className="header-copy">A considered match between two players at the same board.</p>
           </div>
@@ -149,7 +241,7 @@ function App() {
               <div className="player-mark" aria-hidden="true">B</div>
               <div>
                 <p className="player-name">Black</p>
-                <p className="player-role">Second player</p>
+                <p className="player-role">{isStockfishGame && playerSide === 'white' ? 'Stockfish' : 'Second player'}</p>
               </div>
               {turn === 'Black' && !isGameOver && <span className="turn-badge">To move</span>}
             </div>
@@ -173,7 +265,7 @@ function App() {
               <div className="player-mark" aria-hidden="true">W</div>
               <div>
                 <p className="player-name">White</p>
-                <p className="player-role">First player</p>
+                <p className="player-role">{isStockfishGame && playerSide === 'black' ? 'Stockfish' : 'First player'}</p>
               </div>
               {turn === 'White' && !isGameOver && <span className="turn-badge">To move</span>}
             </div>
@@ -184,7 +276,7 @@ function App() {
               <span className="status-dot" aria-hidden="true" />
               <div>
                 <p className="card-label">Game status</p>
-                <p className="game-status">{status}</p>
+                <p className="game-status">{displayedStatus}</p>
               </div>
             </div>
 
@@ -256,7 +348,26 @@ function App() {
             </div>
             <p className="setup-copy">Pick a perspective for this local game. You can flip the board at any time.</p>
             <fieldset className="side-options">
-              <legend className="sr-only">Player side</legend>
+              <legend className="setup-legend">Game mode</legend>
+              {(['local', 'stockfish'] as const).map((choice) => (
+                <label className={`side-option ${gameModeChoice === choice ? 'side-option-selected' : ''}`} key={choice}>
+                  <input
+                    type="radio"
+                    name="game-mode"
+                    value={choice}
+                    checked={gameModeChoice === choice}
+                    onChange={() => setGameModeChoice(choice)}
+                  />
+                  <span className="side-option-mark" aria-hidden="true">{choice === 'stockfish' ? 'S' : '2P'}</span>
+                  <span>
+                    <strong>{choice === 'stockfish' ? 'Play Stockfish' : 'Local two-player'}</strong>
+                    <small>{choice === 'stockfish' ? 'Face the Stockfish engine' : 'Take turns at the same board'}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <fieldset className="side-options">
+              <legend className="setup-legend">Your side</legend>
               {(['white', 'black', 'random'] as const).map((choice) => (
                 <label className={`side-option ${sideChoice === choice ? 'side-option-selected' : ''}`} key={choice}>
                   <input
@@ -274,15 +385,26 @@ function App() {
                 </label>
               ))}
             </fieldset>
+            {gameModeChoice === 'stockfish' && (
+              <fieldset className="difficulty-options">
+                <legend className="setup-legend">Difficulty</legend>
+                {(['easy', 'medium', 'hard'] as const).map((choice) => (
+                  <label className="difficulty-option" key={choice}>
+                    <input
+                      type="radio"
+                      name="difficulty"
+                      value={choice}
+                      checked={difficultyChoice === choice}
+                      onChange={() => setDifficultyChoice(choice)}
+                    />
+                    <span>{choice[0].toUpperCase() + choice.slice(1)}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
             <div className="setup-actions">
               <button className="secondary-button" type="button" onClick={() => setIsSetupOpen(false)}>Cancel</button>
-              <button className="new-game-button" type="button" onClick={() => {
-                const selectedSide = sideChoice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : sideChoice
-                setPlayerSide(selectedSide)
-                setBoardOrientation(selectedSide)
-                setGame(new Chess())
-                setIsSetupOpen(false)
-              }}>Start game</button>
+              <button className="new-game-button" type="button" onClick={handleStartGame}>Start game</button>
             </div>
           </section>
         </div>

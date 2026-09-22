@@ -411,6 +411,16 @@ h1 {
   border: 0;
 }
 
+.setup-legend {
+  margin-bottom: 0.65rem;
+  color: #9b4b32;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .side-option {
   display: flex;
   align-items: center;
@@ -471,6 +481,29 @@ h1 {
   justify-content: flex-end;
   gap: 0.65rem;
   margin-top: 1.5rem;
+}
+
+.difficulty-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.difficulty-option {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #625c50;
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.difficulty-option input {
+  accent-color: #9b4b32;
 }
 
 .sr-only {
