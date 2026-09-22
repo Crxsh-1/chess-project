@@ -163,6 +163,38 @@ h1 {
   color: #625c50;
 }
 
+.player-clock {
+  margin-left: auto;
+  padding: 0.35rem 0.55rem;
+  color: #625c50;
+  border: 1px solid rgba(39, 37, 31, 0.18);
+  border-radius: 2px;
+  background: rgba(244, 240, 232, 0.8);
+  font-family: 'Trebuchet MS', sans-serif;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.player-black .player-clock {
+  color: #fffdf8;
+  border-color: rgba(255, 253, 248, 0.24);
+  background: rgba(255, 253, 248, 0.1);
+}
+
+.player-clock.clock-active {
+  color: #356247;
+  border-color: rgba(79, 147, 100, 0.45);
+  background: #edf5ed;
+}
+
+.player-black .player-clock.clock-active {
+  color: #d9f0dc;
+  border-color: rgba(143, 204, 157, 0.55);
+  background: rgba(79, 147, 100, 0.25);
+}
+
 .turn-badge {
   margin-left: auto;
   padding: 0.35rem 0.55rem;
@@ -344,7 +376,9 @@ h1 {
 
 .setup-dialog {
   width: min(100%, 32rem);
+  max-height: calc(100vh - 2rem);
   padding: clamp(1.5rem, 5vw, 2.5rem);
+  overflow-y: auto;
   border: 1px solid rgba(39, 37, 31, 0.2);
   background: #fffdf8;
   box-shadow: 12px 12px 0 rgba(215, 203, 183, 0.8);
@@ -560,6 +594,10 @@ h1 {
   .secondary-button,
   .new-game-button {
     flex: 1;
+  }
+
+  .player-clock {
+    font-size: 0.9rem;
   }
 
   .setup-actions .secondary-button,

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
+import {
+  advanceClock,
+  createClockState,
+  formatClock,
+  restoreClock,
+  startClock,
+  stopClock,
+  switchClock,
+  type ClockState,
+  type TimeControl,
+} from './clockLogic'
 import { isHumanTurn, SessionGuard, undoToDecisionPoint } from './gameLogic'
 import { StockfishEngine, type EngineDifficulty } from './stockfishEngine'
 import './App.css'
@@ -36,6 +47,9 @@ function App() {
   const [gameModeChoice, setGameModeChoice] = useState<GameMode>('local')
   const [difficulty, setDifficulty] = useState<EngineDifficulty>('medium')
   const [difficultyChoice, setDifficultyChoice] = useState<EngineDifficulty>('medium')
+  const [timeControlChoice, setTimeControlChoice] = useState<TimeControl>(10)
+  const [timeControl, setTimeControl] = useState<TimeControl>(10)
+  const [clock, setClock] = useState<ClockState>(() => createClockState(10))
   const [boardOrientation, setBoardOrientation] = useState<BoardSide>('white')
   const [isSetupOpen, setIsSetupOpen] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
@@ -43,6 +57,8 @@ function App() {
   const [engineError, setEngineError] = useState<string | null>(null)
   const engineRef = useRef<StockfishEngine | null>(null)
   const sessionGuardRef = useRef(new SessionGuard())
+  const clockSnapshotsRef = useRef(new Map<number, ClockState>([[0, createClockState(10)]]))
+  const clockRef = useRef(clock)
   const isGameOver = game.isGameOver()
   const isCheckmate = game.isCheckmate()
   const isStalemate = game.isStalemate()
@@ -73,9 +89,11 @@ function App() {
 
     return { capturedByWhite, capturedByBlack }
   }, [game])
+  const isTimedOut = clock.timedOutBy !== null
+  const isClockGame = timeControl !== 'unlimited'
 
   const handlePieceDrop = ({ sourceSquare, targetSquare }: PieceDropArgs) => {
-    if (!targetSquare || isGameOver || isThinking || (isStockfishGame && !isHumanTurn(game, playerSide))) {
+    if (!targetSquare || isGameOver || isTimedOut || isThinking || (isStockfishGame && !isHumanTurn(game, playerSide))) {
       return false
     }
 
@@ -91,6 +109,11 @@ function App() {
       return false
     }
 
+    const nextClock = isClockGame
+      ? switchClock(clock, nextGame.turn(), performance.now(), !nextGame.isGameOver())
+      : createClockState('unlimited')
+    clockSnapshotsRef.current.set(nextGame.history().length, restoreClock(nextClock))
+    setClock(nextClock)
     setGame(nextGame)
     return true
   }
@@ -99,6 +122,7 @@ function App() {
     sessionGuardRef.current.next()
     engineRef.current?.cancel()
     setIsThinking(false)
+    setClock((current) => stopClock(current))
     setIsSetupOpen(true)
   }
 
@@ -111,6 +135,8 @@ function App() {
     sessionGuardRef.current.next()
     engineRef.current?.cancel()
     setIsThinking(false)
+    const restoredClock = clockSnapshotsRef.current.get(previousGame.history().length)
+    setClock(restoredClock ? restoreClock(restoredClock) : createClockState(timeControl))
     setGame(previousGame)
   }
 
@@ -121,6 +147,10 @@ function App() {
     setIsThinking(false)
     setEngineReady(true)
     setEngineError(null)
+    setTimeControl(timeControlChoice)
+    const nextClock = createClockState(timeControlChoice)
+    clockSnapshotsRef.current = new Map([[0, nextClock]])
+    setClock(nextClock)
     setPlayerSide(selectedSide)
     setBoardOrientation(selectedSide)
     setGameMode(gameModeChoice)
@@ -136,9 +166,16 @@ function App() {
       : isCheck
         ? `${turn} is in check`
         : `${turn} to move`
-  const statusTone = isCheckmate || isStalemate ? 'status-terminal' : isCheck ? 'status-warning' : ''
+  const statusTone = isCheckmate || isStalemate || isTimedOut ? 'status-terminal' : isCheck ? 'status-warning' : ''
   const isStockfishGame = gameMode === 'stockfish'
   const displayedStatus = isThinking ? 'Stockfish is thinking...' : status
+  const clockStatus = isTimedOut
+    ? `${clock.timedOutBy === 'w' ? 'White' : 'Black'} ran out of time`
+    : displayedStatus
+
+  useEffect(() => {
+    clockRef.current = clock
+  }, [clock])
 
   useEffect(() => {
     const engine = new StockfishEngine((error) => {
@@ -162,7 +199,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!engineReady || isSetupOpen || !isStockfishGame || isGameOver || isHumanTurn(game, playerSide) || !engineRef.current) {
+    if (!engineReady || isSetupOpen || !isStockfishGame || isGameOver || isTimedOut || isHumanTurn(game, playerSide) || !engineRef.current) {
       return
     }
 
@@ -179,7 +216,7 @@ function App() {
       }
 
       setIsThinking(false)
-      if (!bestMove) {
+      if (!bestMove || clockRef.current.timedOutBy) {
         return
       }
 
@@ -194,6 +231,11 @@ function App() {
           to: bestMove.slice(2, 4),
           promotion: bestMove[4] ?? 'q',
         })
+        const nextClock = nextGame.isGameOver()
+          ? stopClock(clockRef.current)
+          : switchClock(clockRef.current, nextGame.turn(), performance.now())
+        clockSnapshotsRef.current.set(nextGame.history().length, restoreClock(nextClock))
+        setClock(nextClock)
         setGame(nextGame)
       } catch {
         setEngineError('Stockfish returned an unusable move.')
@@ -206,7 +248,45 @@ function App() {
       engine.cancel()
       setIsThinking(false)
     }
-  }, [difficulty, engineReady, game, isGameOver, isSetupOpen, isStockfishGame, playerSide])
+  }, [difficulty, engineReady, game, isGameOver, isSetupOpen, isStockfishGame, isTimedOut, playerSide])
+
+  useEffect(() => {
+    if (!isClockGame || isSetupOpen || isGameOver || isTimedOut || clock.running) {
+      return
+    }
+
+    setClock((current) => startClock(current, game.turn(), performance.now()))
+  }, [clock.running, game, isClockGame, isGameOver, isSetupOpen, isTimedOut])
+
+  useEffect(() => {
+    if (!clock.running) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      setClock((current) => {
+        const next = advanceClock(current, performance.now())
+        if (next.timedOutBy && !current.timedOutBy) {
+          sessionGuardRef.current.next()
+          engineRef.current?.cancel()
+          setIsThinking(false)
+        }
+        return next
+      })
+    }, 250)
+
+    return () => window.clearInterval(timer)
+  }, [clock.running])
+
+  useEffect(() => {
+    if (!isGameOver && !isTimedOut) {
+      return
+    }
+
+    setClock((current) => stopClock(current))
+    engineRef.current?.cancel()
+    setIsThinking(false)
+  }, [isGameOver, isTimedOut])
 
   useEffect(() => {
     if (!isSetupOpen) {
@@ -253,7 +333,10 @@ function App() {
                 <p className="player-name">Black</p>
                 <p className="player-role">{isStockfishGame && playerSide === 'white' ? 'Stockfish' : 'Second player'}</p>
               </div>
-              {turn === 'Black' && !isGameOver && <span className="turn-badge">To move</span>}
+              <span className={`player-clock ${clock.activeSide === 'b' && clock.running ? 'clock-active' : ''}`} aria-label={`Black clock: ${formatClock(clock.blackMs)}`}>
+                {formatClock(clock.blackMs)}
+              </span>
+              {turn === 'Black' && !isGameOver && !isTimedOut && <span className="turn-badge">To move</span>}
             </div>
 
             <div className="board-frame" aria-label={`${boardOrientation === 'white' ? 'White' : 'Black'} perspective`}>
@@ -262,7 +345,7 @@ function App() {
                 position: game.fen(),
                   boardOrientation,
                 onPieceDrop: handlePieceDrop,
-                allowDragging: !isGameOver,
+                allowDragging: !isGameOver && !isTimedOut,
                 animationDurationInMs: 180,
                 boardStyle: { borderRadius: '2px', overflow: 'hidden' },
                 darkSquareStyle: { backgroundColor: '#66845a' },
@@ -277,7 +360,10 @@ function App() {
                 <p className="player-name">White</p>
                 <p className="player-role">{isStockfishGame && playerSide === 'black' ? 'Stockfish' : 'First player'}</p>
               </div>
-              {turn === 'White' && !isGameOver && <span className="turn-badge">To move</span>}
+              <span className={`player-clock ${clock.activeSide === 'w' && clock.running ? 'clock-active' : ''}`} aria-label={`White clock: ${formatClock(clock.whiteMs)}`}>
+                {formatClock(clock.whiteMs)}
+              </span>
+              {turn === 'White' && !isGameOver && !isTimedOut && <span className="turn-badge">To move</span>}
             </div>
           </div>
 
@@ -286,7 +372,7 @@ function App() {
               <span className="status-dot" aria-hidden="true" />
               <div>
                 <p className="card-label">Game status</p>
-                <p className="game-status">{engineError ?? displayedStatus}</p>
+                <p className="game-status">{engineError ?? clockStatus}</p>
               </div>
             </div>
 
@@ -372,6 +458,24 @@ function App() {
                   <span>
                     <strong>{choice === 'stockfish' ? 'Play Stockfish' : 'Local two-player'}</strong>
                     <small>{choice === 'stockfish' ? 'Face the Stockfish engine' : 'Take turns at the same board'}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <fieldset className="side-options">
+              <legend className="setup-legend">Time control</legend>
+              {(['unlimited', 1, 3, 5, 10] as const).map((choice) => (
+                <label className={`side-option ${timeControlChoice === choice ? 'side-option-selected' : ''}`} key={choice}>
+                  <input
+                    type="radio"
+                    name="time-control"
+                    value={choice}
+                    checked={timeControlChoice === choice}
+                    onChange={() => setTimeControlChoice(choice)}
+                  />
+                  <span>
+                    <strong>{choice === 'unlimited' ? 'Unlimited' : `${choice} minute${choice === 1 ? '' : 's'}`}</strong>
+                    <small>{choice === 'unlimited' ? 'Clocks disabled' : 'Same time for both players'}</small>
                   </span>
                 </label>
               ))}
